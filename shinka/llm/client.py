@@ -61,6 +61,16 @@ def get_client_llm(model_name: str, structured_output: bool = False) -> Tuple[An
         )
         if structured_output:
             client = instructor.from_openai(client, mode=instructor.Mode.TOOLS_STRICT)
+    elif model_name.startswith("local-"):
+        print("Using local model", model_name)
+        client = openai.OpenAI(
+            base_url=os.getenv("SHINKA_LOCAL_LLM_URL", "http://localhost:8000/v1"),
+            api_key=os.getenv("SHINKA_LOCAL_LLM_API_KEY", "EMPTY"),
+        )
+        setattr(client, "_shinka_provider", "local")
+        model_name = model_name.split("local-", 1)[-1]
+        if structured_output:
+            client = instructor.from_openai(client, mode=instructor.Mode.TOOLS_STRICT)
     elif model_name in DEEPSEEK_MODELS.keys():
         client = openai.OpenAI(
             api_key=os.environ["DEEPSEEK_API_KEY"],

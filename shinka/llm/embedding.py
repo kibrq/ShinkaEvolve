@@ -38,6 +38,15 @@ def get_client_model(model_name: str) -> tuple[openai.OpenAI, str]:
             api_version=os.getenv("AZURE_API_VERSION"),
             azure_endpoint=os.getenv("AZURE_API_ENDPOINT"),
         )
+    elif model_name.startswith("local-"):
+        # remove the "local-" prefix
+        model_to_use = model_name.split("local-")[-1]
+
+        client = openai.OpenAI(
+            base_url=os.getenv("SHINKA_LOCAL_EMBEDDINGS_URL", "http://localhost:8001/v1"),
+            api_key=os.getenv("SHINKA_LOCAL_EMBEDDINGS_API_KEY", "EMPTY"),
+        )
+
     else:
         raise ValueError(f"Invalid embedding model: {model_name}")
 
@@ -80,7 +89,7 @@ class EmbeddingClient:
             response = self.client.embeddings.create(
                 model=self.model, input=code, encoding_format="float"
             )
-            cost = response.usage.total_tokens * OPENAI_EMBEDDING_COSTS[self.model]
+            cost = response.usage.total_tokens * OPENAI_EMBEDDING_COSTS.get(self.model, 0.0)
             # Extract embedding from response
             if single_code:
                 return response.data[0].embedding, cost

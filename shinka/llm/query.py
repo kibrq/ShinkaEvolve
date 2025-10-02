@@ -20,6 +20,7 @@ from .models import (
     query_openai,
     query_deepseek,
     query_gemini,
+    query_local,
     QueryResult,
 )
 import logging
@@ -201,7 +202,10 @@ def query(
     client, model_name = get_client_llm(
         model_name, structured_output=output_model is not None
     )
-    if model_name in CLAUDE_MODELS.keys() or "anthropic" in model_name:
+    provider = getattr(client, "_shinka_provider", "")
+    if provider == "local":
+        query_fn = query_local
+    elif model_name in CLAUDE_MODELS.keys() or "anthropic" in model_name:
         query_fn = query_anthropic
     elif model_name in OPENAI_MODELS.keys():
         query_fn = query_openai
