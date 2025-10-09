@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from shinka.database import Program
 from shinka.llm import LLMClient
-from shinka.prompts import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG
+from shinka.prompts import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG, NOVELTY_USER_MSG_TOP_5
 
 logger = logging.getLogger(__name__)
 
@@ -84,85 +84,87 @@ class NoveltyJudge:
             "similarity_scores": [],
         }
 
-        for attempt in range(self.max_novelty_attempts):
+        # for attempt in range(self.max_novelty_attempts):
             # Compute similarities with programs in island
-            similarity_scores = database.compute_similarity(
-                code_embedding, parent_program.island_idx
+
+        attempt = 0
+        similarity_scores = database.compute_similarity(
+            code_embedding, parent_program.island_idx
+        )
+
+        if not similarity_scores:
+            logger.info(
+                f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
+                "Accepting program due to no similarity scores."
+            )
+            novelty_metadata["similarity_scores"] = []
+            return True, novelty_metadata
+
+        max_similarity = max(similarity_scores)
+        sorted_similarity_scores = sorted(similarity_scores, reverse=True)
+        formatted_similarities = [f"{s:.2f}" for s in sorted_similarity_scores]
+
+        logger.info(f"Top-5 similarity scores: {formatted_similarities[:5]}")
+
+        novelty_metadata["max_similarity"] = max_similarity
+        novelty_metadata["similarity_scores"] = similarity_scores
+
+        if max_similarity <= self.similarity_threshold:
+            logger.info(
+                f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
+                f"Accepting program due to low similarity "
+                f"({max_similarity:.3f} <= {self.similarity_threshold})"
+            )
+            return True, novelty_metadata
+
+        # High similarity detected - check with LLM if configured
+        should_reject = True
+        novelty_cost = 0.0
+
+        if self.novelty_llm_client is not None:
+            # Get the most similar program for LLM comparison
+            most_similar_programs = database.get_most_similar_program(
+                code_embedding, parent_program.island_idx, top=5
             )
 
-            if not similarity_scores:
-                logger.info(
-                    f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
-                    "Accepting program due to no similarity scores."
-                )
-                novelty_metadata["similarity_scores"] = []
-                return True, novelty_metadata
-
-            max_similarity = max(similarity_scores)
-            sorted_similarity_scores = sorted(similarity_scores, reverse=True)
-            formatted_similarities = [f"{s:.2f}" for s in sorted_similarity_scores]
-
-            logger.info(f"Top-5 similarity scores: {formatted_similarities[:5]}")
-
-            novelty_metadata["max_similarity"] = max_similarity
-            novelty_metadata["similarity_scores"] = similarity_scores
-
-            if max_similarity <= self.similarity_threshold:
-                logger.info(
-                    f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
-                    f"Accepting program due to low similarity "
-                    f"({max_similarity:.3f} <= {self.similarity_threshold})"
-                )
-                return True, novelty_metadata
-
-            # High similarity detected - check with LLM if configured
-            should_reject = True
-            novelty_cost = 0.0
-
-            if self.novelty_llm_client is not None:
-                # Get the most similar program for LLM comparison
-                most_similar_program = database.get_most_similar_program(
-                    code_embedding, parent_program.island_idx
-                )
-
-                if most_similar_program:
-                    try:
-                        # Read the current proposed code
-                        proposed_code = Path(exec_fname).read_text(encoding="utf-8")
-                        is_novel, explanation, cost = self.check_llm_novelty(
-                            proposed_code, most_similar_program
-                        )
-                        should_reject = not is_novel
-                        novelty_cost = cost
-                        novelty_metadata["novelty_checks_performed"] += 1
-                        novelty_metadata["novelty_total_cost"] += cost
-                        novelty_metadata["novelty_explanation"] = explanation
-                    except Exception as e:
-                        logger.warning(f"Error reading code for novelty check: {e}")
-                        should_reject = True  # Default to rejection on error
-
-            if should_reject:
-                logger.info(
-                    f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
-                    f"Rejecting program due to high similarity "
-                    f"({max_similarity:.3f} > {self.similarity_threshold})"
-                    + (
-                        f" and LLM novelty check (cost: {novelty_cost:.4f})"
-                        if novelty_cost > 0
-                        else ""
+            if most_similar_programs:
+                try:
+                    # Read the current proposed code
+                    proposed_code = Path(exec_fname).read_text(encoding="utf-8")
+                    is_novel, explanation, cost = self.check_llm_novelty(
+                        proposed_code, most_similar_programs
                     )
-                    + ". Retrying with different parent/inspirations."
+                    should_reject = not is_novel
+                    novelty_cost = cost
+                    novelty_metadata["novelty_checks_performed"] += 1
+                    novelty_metadata["novelty_total_cost"] += cost
+                    novelty_metadata["novelty_explanation"] = explanation
+                except Exception as e:
+                    logger.warning(f"Error reading code for novelty check: {e}")
+                    should_reject = True  # Default to rejection on error
+
+        if should_reject:
+            logger.info(
+                f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
+                f"Rejecting program due to high similarity "
+                f"({max_similarity:.3f} > {self.similarity_threshold})"
+                + (
+                    f" and LLM novelty check (cost: {novelty_cost:.4f})"
+                    if novelty_cost > 0
+                    else ""
                 )
-                # Continue to next attempt (rejection sampling)
-                continue
-            else:
-                logger.info(
-                    f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
-                    f"Accepting program despite high similarity "
-                    f"({max_similarity:.3f} > {self.similarity_threshold}) "
-                    f"due to LLM novelty check (cost: {novelty_cost:.4f})."
-                )
-                return True, novelty_metadata
+                + ". Retrying with different parent/inspirations."
+            )
+            # Continue to next attempt (rejection sampling)
+            # continue
+        else:
+            logger.info(
+                f"NOVELTY CHECK {attempt + 1}/{self.max_novelty_attempts}: "
+                f"Accepting program despite high similarity "
+                f"({max_similarity:.3f} > {self.similarity_threshold}) "
+                f"due to LLM novelty check (cost: {novelty_cost:.4f})."
+            )
+            return True, novelty_metadata
 
         # All attempts exhausted, reject the program
         logger.info(
@@ -172,7 +174,7 @@ class NoveltyJudge:
         return False, novelty_metadata
 
     def check_llm_novelty(
-        self, proposed_code: str, most_similar_program: Program
+        self, proposed_code: str, most_similar_programs: List[Program]
     ) -> Tuple[bool, str, float]:
         """
         Use LLM to judge if the proposed code is meaningfully different from
@@ -189,9 +191,11 @@ class NoveltyJudge:
             logger.debug("Novelty LLM not configured, skipping novelty check")
             return True, "No novelty LLM configured", 0.0
 
-        user_msg = NOVELTY_USER_MSG.format(
+        blocks = "\n\n".join([f"```{p.language}\n{p.code}\n```" for p in most_similar_programs])
+
+        user_msg = NOVELTY_USER_MSG_TOP_5.format(
             language=self.language,
-            existing_code=most_similar_program.code,
+            blocks=blocks,
             proposed_code=proposed_code,
         )
 

@@ -74,6 +74,8 @@ class PromptSampler:
         else:
             sys_msg = self.task_sys_msg
 
+        sys_msg += "\n\n# Output format"
+
         # Sample coding type
         # Filter out crossover if no inspirations
         if len(archive_inspirations) == 0 and len(top_k_inspirations) == 0:

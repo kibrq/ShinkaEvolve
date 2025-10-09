@@ -25,7 +25,7 @@ from .prompts_meta import (
     META_STEP3_SYSTEM_MSG,
     META_STEP3_USER_MSG,
 )
-from .prompts_novelty import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG
+from .prompts_novelty import NOVELTY_SYSTEM_MSG, NOVELTY_USER_MSG, NOVELTY_USER_MSG_TOP_5
 
 __all__ = [
     "construct_eval_history_msg",
@@ -51,4 +51,5 @@ __all__ = [
     "META_STEP3_USER_MSG",
     "NOVELTY_SYSTEM_MSG",
     "NOVELTY_USER_MSG",
+    "NOVELTY_USER_MSG_TOP_5",
 ]

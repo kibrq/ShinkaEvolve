@@ -1565,7 +1565,7 @@ class ProgramDatabase:
 
     @db_retry()
     def get_most_similar_program(
-        self, code_embedding: List[float], island_idx: int
+        self, code_embedding: List[float], island_idx: int, top: int = 1
     ) -> Optional[Program]:
         """
         Get the most similar program to the given embedding in the specified island.
@@ -1602,20 +1602,30 @@ class ProgramDatabase:
         max_similarity = -1.0
         most_similar_id = None
 
+        similarities = []
+
         for row in rows:
             try:
                 embedding = json.loads(row["embedding"])
                 if embedding:  # Skip empty embeddings
                     similarity = self._cosine_similarity(code_embedding, embedding)
-                    if similarity > max_similarity:
-                        max_similarity = similarity
-                        most_similar_id = row["id"]
+                    similarities.append((row["id"], similarity))
+                    # if similarity > max_similarity:
+                    #     max_similarity = similarity
+                    #     most_similar_id = row["id"]
             except json.JSONDecodeError:
                 logger.warning(f"Could not decode embedding for program {row['id']}")
                 continue
 
-        if most_similar_id:
-            return self.get(most_similar_id)
+        if len(similarities) > 0:
+            if top == 1:
+                max_similarity_idx = np.argmax([x[1] for x in similarities])
+                most_similar_id = similarities[max_similarity_idx][0]
+                return self.get(most_similar_id)
+            else:
+                sorted_idx = np.argsort([x[1] for x in similarities])[::-1]
+                most_similar_ids = [similarities[i][0] for i in sorted_idx[:top]]
+                return [self.get(id) for id in most_similar_ids]
         return None
 
     @db_retry()
