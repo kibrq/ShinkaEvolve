@@ -79,6 +79,9 @@ class DatabaseConfig:
     # Weighted tree parent selection parameters
     parent_selection_lambda: float = 10.0  # >0 sharpness of sigmoid
 
+    # Depth penalized parent selection parameters
+    depth_penalty_exponent: float = -1.0  # >0 sharpness of sigmoid
+
     # Beam search parent selection parameters
     num_beams: int = 5
 

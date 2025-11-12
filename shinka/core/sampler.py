@@ -130,7 +130,12 @@ class PromptSampler:
             )
 
         if patch_type == "diff":
-            iter_msg = DIFF_ITER_MSG.format(
+            if isinstance(DIFF_ITER_MSG, str):
+                iter_msg = DIFF_ITER_MSG
+            else:
+                iter_msg = DIFF_ITER_MSG()
+
+            iter_msg = iter_msg.format(
                 language=self.language,
                 code_content=parent.code,
                 performance_metrics=perf_str(
@@ -139,7 +144,12 @@ class PromptSampler:
                 text_feedback_section=text_feedback_section,
             )
         elif patch_type == "full":
-            iter_msg = FULL_ITER_MSG.format(
+            if isinstance(FULL_ITER_MSG, str):
+                iter_msg = FULL_ITER_MSG
+            else:
+                iter_msg = FULL_ITER_MSG()
+
+            iter_msg = iter_msg.format(
                 language=self.language,
                 code_content=parent.code,
                 performance_metrics=perf_str(
@@ -148,7 +158,12 @@ class PromptSampler:
                 text_feedback_section=text_feedback_section,
             )
         elif patch_type == "cross":
-            iter_msg = CROSS_ITER_MSG.format(
+            if isinstance(CROSS_ITER_MSG, str):
+                iter_msg = CROSS_ITER_MSG
+            else:
+                iter_msg = CROSS_ITER_MSG()
+
+            iter_msg = iter_msg.format(
                 language=self.language,
                 code_content=parent.code,
                 performance_metrics=perf_str(

@@ -356,7 +356,7 @@ class AsymmetricUCB(BanditBase):
             if rem == 0:
                 p_sub[:] = 1.0 / idx.size
             else:
-                p_sub[winners] = (1.0 - self.epsilon) / winners.size
+                p_sub[winners] = (1.0 - self.epsilon) / winners.size if winners.size > 0 else 0.0
                 mask = np.ones(idx.size, dtype=bool)
                 mask[winners] = False
                 p_sub[mask] = self.epsilon / rem

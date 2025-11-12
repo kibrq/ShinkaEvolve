@@ -156,6 +156,7 @@ class MetaSummarizer:
             )
         except Exception as e:
             logger.error(f"Failed to complete 3-step meta-analysis: {e}")
+            logger.exception(e)
             return None, total_meta_cost
 
         # Clear the evaluated programs list immediately after processing

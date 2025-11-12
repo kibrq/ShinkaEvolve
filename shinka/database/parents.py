@@ -2,8 +2,9 @@ import json
 import logging
 import sqlite3
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict, Set
 import numpy as np  # type: ignore
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -455,6 +456,243 @@ class WeightedSamplingStrategy(ParentSamplingStrategy):
         return self.get_program(selected_parent.id)
 
 
+class DepthPenalizedSamplingStrategy(ParentSamplingStrategy):
+    """Weighted sampling with an additional penalty based on lineage depth."""
+
+    def _build_parent_map(self) -> Dict[str, Optional[str]]:
+        self.cursor.execute("SELECT id, parent_id FROM programs")
+        rows = self.cursor.fetchall()
+        parent_map: Dict[str, Optional[str]] = {}
+        for row in rows:
+            pid = row["id"]
+            parent_map[pid] = row["parent_id"]
+        return parent_map
+
+    def _get_program_depth(
+        self,
+        program_id: Optional[str],
+        parent_map: Dict[str, Optional[str]],
+        depth_cache: Dict[str, float],
+        visiting: Optional[Set[str]] = None,
+    ) -> float:
+        if not program_id:
+            return 0.0
+        if program_id in depth_cache:
+            return depth_cache[program_id]
+
+        if visiting is None:
+            visiting = set()
+        if program_id in visiting:
+            logger.warning(
+                "Cycle detected when computing depth for program %s. "
+                "Treating depth as 0.",
+                program_id,
+            )
+            depth_cache[program_id] = 0.0
+            return 0.0
+
+        visiting.add(program_id)
+        parent_id = parent_map.get(program_id)
+        if not parent_id or parent_id == program_id:
+            depth = 0.0
+        else:
+            depth = (
+                self._get_program_depth(parent_id, parent_map, depth_cache, visiting)
+                + 1.0
+            )
+        visiting.remove(program_id)
+        depth_cache[program_id] = depth
+        return depth
+
+    def sample_parent(self) -> Any:
+        # Fetch all programs from the archive.
+        if self.island_idx is not None:
+            self.cursor.execute(
+                """
+                SELECT p.*
+                FROM programs p
+                JOIN archive a ON p.id = a.program_id
+                WHERE p.correct = 1 AND p.island_idx = ?
+                """,
+                (self.island_idx,),
+            )
+        else:
+            self.cursor.execute(
+                """
+                SELECT p.*
+                FROM programs p
+                JOIN archive a ON p.id = a.program_id
+                WHERE p.correct = 1
+                """
+            )
+        archive_rows = self.cursor.fetchall()
+
+        if not archive_rows:
+            logger.warning("No archived programs found for depth-penalized sampling.")
+            if self.best_program_id:
+                best_prog = self.get_program(self.best_program_id)
+                if best_prog and (
+                    self.island_idx is None or best_prog.island_idx == self.island_idx
+                ):
+                    return best_prog
+
+            # Fallback to random correct program in island
+            if self.island_idx is not None:
+                self.cursor.execute(
+                    """SELECT id FROM programs 
+                       WHERE correct = 1 AND island_idx = ? 
+                       ORDER BY RANDOM() LIMIT 1""",
+                    (self.island_idx,),
+                )
+            else:
+                self.cursor.execute(
+                    """SELECT id FROM programs WHERE correct = 1 
+                       ORDER BY RANDOM() LIMIT 1"""
+                )
+            row = self.cursor.fetchone()
+            return self.get_program(row["id"]) if row else None
+
+        eligible_programs = []
+        for row in archive_rows:
+            p_dict = dict(row)
+
+            # Parse JSON fields
+            p_dict["public_metrics"] = (
+                json.loads(p_dict["public_metrics"])
+                if p_dict.get("public_metrics")
+                else {}
+            )
+            p_dict["private_metrics"] = (
+                json.loads(p_dict["private_metrics"])
+                if p_dict.get("private_metrics")
+                else {}
+            )
+            p_dict["metadata"] = (
+                json.loads(p_dict["metadata"]) if p_dict.get("metadata") else {}
+            )
+            p_dict["archive_inspiration_ids"] = (
+                json.loads(p_dict["archive_inspiration_ids"])
+                if p_dict.get("archive_inspiration_ids")
+                else []
+            )
+            p_dict["top_k_inspiration_ids"] = (
+                json.loads(p_dict["top_k_inspiration_ids"])
+                if p_dict.get("top_k_inspiration_ids")
+                else []
+            )
+            p_dict["embedding"] = (
+                json.loads(p_dict["embedding"]) if p_dict.get("embedding") else []
+            )
+            p_dict["embedding_pca_2d"] = (
+                json.loads(p_dict["embedding_pca_2d"])
+                if p_dict.get("embedding_pca_2d")
+                else []
+            )
+            p_dict["embedding_pca_3d"] = (
+                json.loads(p_dict["embedding_pca_3d"])
+                if p_dict.get("embedding_pca_3d")
+                else []
+            )
+            p_dict["migration_history"] = (
+                json.loads(p_dict["migration_history"])
+                if p_dict.get("migration_history")
+                else []
+            )
+
+            class SimpleProgram:
+                def __init__(self, data):
+                    for key, value in data.items():
+                        setattr(self, key, value)
+                    if not hasattr(self, "combined_score"):
+                        self.combined_score = 0.0
+                    if not hasattr(self, "generation"):
+                        self.generation = 0
+                    if not hasattr(self, "parent_id"):
+                        self.parent_id = None
+                    if not hasattr(self, "correct"):
+                        self.correct = False
+                    if not hasattr(self, "id"):
+                        self.id = None
+                    if not hasattr(self, "metadata") or self.metadata is None:
+                        self.metadata = {}
+
+            eligible_programs.append(SimpleProgram(p_dict))
+
+        parent_map = self._build_parent_map()
+        depth_cache: Dict[str, float] = {}
+
+        scores = [p.combined_score or 0.0 for p in eligible_programs]
+        alpha_0 = np.median(scores) if scores else 0.0
+
+        score_deviations = [abs(score - alpha_0) for score in scores]
+        mad = np.median(score_deviations) if score_deviations else 1.0
+        scale_factor = max(mad, 1e-6)
+
+        weights, depths, s_is = [], [], []
+        lambda_ = self.config.parent_selection_lambda
+
+        by_depths = defaultdict(list)
+
+        for i, p in enumerate(eligible_programs):
+            alpha_i = p.combined_score or 0.0
+            normalized_diff = (alpha_i - alpha_0) / scale_factor
+            s_i = stable_sigmoid(lambda_ * normalized_diff)
+            depth_val = self._get_program_depth(p.id, parent_map, depth_cache)
+
+            by_depths[depth_val].append((s_i, p.id, alpha_i))
+
+            s_is.append(s_i)
+            depths.append(depth_val)
+
+        weights = [getattr(self.config, "depth_penalty_exponent", 2) ** (-x) for x in by_depths.keys()]
+        weights_sum = sum(weights)
+        weights = [w / weights_sum for w in weights]
+
+        logger.info("Depth weights: %s", weights)
+
+        depth = np.random.choice(list(by_depths.keys()), p=weights)
+        logger.info("Selected depth: %s", depth)
+
+        weights = []
+        for s_i, pid, alpha_i in by_depths[depth]:
+            weights.append(s_i)
+
+        weights_sum = sum(weights)
+        if weights_sum > 0:
+            probabilities = [w / weights_sum for w in weights]
+        else:
+            logger.warning(
+                "All depth-penalized parent selection weights are zero, "
+                "falling back to uniform sampling."
+            )
+            num_eligible = len(eligible_programs)
+            probabilities = [1.0 / num_eligible] * num_eligible
+
+        logger.info("Selected depth: %s", depth)
+
+        selected_parent = np.random.choice(range(len(by_depths[depth])), p=probabilities)
+        selected_id = by_depths[depth][selected_parent][1]
+
+        logger.info(
+            "Selected from options: %s, %s",
+            [p[1] for p in by_depths[depth]],
+            [p[2] for p in by_depths[depth]],
+        )
+
+        program = self.get_program(selected_id)
+
+        logger.info(
+            "Depth-penalized sampled parent %s "
+            "(Gen: %s, Score: %.4f, Island: %s)",
+            selected_id,
+            getattr(program, "generation", None),
+            program.combined_score or 0.0,
+            getattr(program, "island_idx", None),
+        )
+
+        return program
+
+
 class BeamSearchSamplingStrategy(ParentSamplingStrategy):
     """Beam search sampling strategy that locks onto a parent for multiple generations."""
 
@@ -652,6 +890,15 @@ class CombinedParentSelector:
             )
         elif strategy_name == "weighted":
             strategy = WeightedSamplingStrategy(
+                self.cursor,
+                self.conn,
+                self.config,
+                self.get_program,
+                self.best_program_id,
+                island_idx,
+            )
+        elif strategy_name == "depth_penalized":
+            strategy = DepthPenalizedSamplingStrategy(
                 self.cursor,
                 self.conn,
                 self.config,

@@ -7,7 +7,7 @@
 
 # Original/Default Full Rewrite
 FULL_SYS_FORMAT_DEFAULT = """
-Rewrite the program to improve its specified metrics.
+Rewrite the program to improve its performance on the specified metrics.
 Provide the complete new program code.
 You MUST respond using a short summary name, description and the full code:
 
@@ -33,7 +33,7 @@ A description and argumentation process of the code you are proposing.
 # Variant 1: Completely Different Algorithm
 FULL_SYS_FORMAT_DIFFERENT = """
 Design a completely different algorithm approach to solve the same problem.
-Ignore the current implementation and think of alternative algorithmic strategies that could achieve better specified metrics.
+Ignore the current implementation and think of alternative algorithmic strategies that could achieve better performance.
 You MUST respond using a short summary name, description and the full code:
 
 <NAME>
@@ -95,7 +95,7 @@ A shortened name summarizing the code you are proposing. Lowercase, no spaces, u
 </NAME>
 
 <DESCRIPTION>
-Describe the structural changes you are making and how they improve the program's metrics, maintainability, or efficiency.
+Describe the structural changes you are making and how they improve the program's performance, maintainability, or efficiency.
 </DESCRIPTION>
 
 <CODE>
@@ -122,7 +122,7 @@ spaces, underscores allowed.
 </NAME>
 
 <DESCRIPTION>
-Identify the key parameters in the current approach and explain how your new parameter choices or algorithmic configuration will lead to better metric values.
+Identify the key parameters in the current approach and explain how your new parameter choices or algorithmic configuration will lead to better performance.
 </DESCRIPTION>
 
 <CODE>
@@ -166,13 +166,13 @@ program, but with improved internal implementation):
 {code_content}
 ```
 
-Here are the metrics of the program:
+Here are the performance metrics of the program:
 
 {performance_metrics}{text_feedback_section}
 
 # Task
 
-Rewrite the program to improve its specified metrics.
+Rewrite the program to improve its performance on the specified metrics.
 Provide the complete new program code.
 
 IMPORTANT: Make sure your rewritten program maintains the same inputs and outputs as the original program, but with improved internal implementation.

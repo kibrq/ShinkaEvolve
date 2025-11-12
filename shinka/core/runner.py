@@ -811,6 +811,14 @@ class EvolutionRunner:
         private_metrics = metrics_val.get("private", {})
         text_feedback = metrics_val.get("text_feedback", "")
 
+        novelty_check = self.novelty_judge.check_novelty_with_private_metrics(metrics_val)
+
+        logger.info(f"Novelty check by private metrics: {novelty_check}")
+
+        if not novelty_check:
+            logger.info(f"Skipping program {job.job_id} because it is not novel by private metrics")
+            correct_val = False
+
         # Add the program to the database
         db_program = Program(
             id=str(uuid.uuid4()),

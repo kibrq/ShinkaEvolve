@@ -40,7 +40,7 @@ Here is the current program we are trying to improve (you will need to propose a
 {code_content}
 ```
 
-Here are the specified metrics of the program:
+Here are the performance metrics of the program:
 
 {performance_metrics}{text_feedback_section}
 

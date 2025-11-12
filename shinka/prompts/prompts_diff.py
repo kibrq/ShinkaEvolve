@@ -51,7 +51,7 @@ Here is the current program we are trying to improve (you will need to propose a
 {code_content}
 ```
 
-Here are the specified metrics of the program:
+Here are the performance metrics of the program:
 
 {performance_metrics}{text_feedback_section}
 
@@ -63,7 +63,7 @@ Note that the changes you propose will be applied sequentially, so you should as
 
 # Task
 
-Suggest a new idea to improve the specified metrics of the code that is inspired by your expert knowledge of the considered subject.
+Suggest a new idea to improve the performance of the code that is inspired by your expert knowledge of the considered subject.
 Your goal is to maximize the `combined_score` of the program.
 Describe each change with a SEARCH/REPLACE block.
 

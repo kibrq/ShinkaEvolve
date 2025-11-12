@@ -8,13 +8,6 @@
     <!-- Remove Highlight.js CSS -->
     <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github.min.css"> -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
-    <script>
-        window.MathJax = {
-            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
-            svg: { fontCache: 'global' }
-        };
-    </script>
-    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -1438,6 +1431,7 @@
             </div>
             
     <!-- Place all external script tags here, before the main inline script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_SVG"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -1463,7 +1457,6 @@
             // ALWAYS use DOMContentLoaded to ensure the full initial DOM is ready
             console.log("Adding DOMContentLoaded listener...");
             document.addEventListener('DOMContentLoaded', initialize);
-            document.addEventListener('DOMContentLoaded', () => typesetMath(document.body));
         } catch (error) {
             console.error("Error in initial script setup:", error);
         }
@@ -1477,20 +1470,6 @@
         let autoRefreshInterval = null;
         let autoRefreshEnabled = false;
         let lastDataTimestamp = null;
-
-        function typesetMath(root) {
-            if (window.MathJax?.typesetPromise) {
-                return window.MathJax.typesetPromise(root ? [root] : undefined)
-                    .catch(err => console.error('MathJax typeset failed:', err));
-            }
-            return Promise.resolve();
-        }
-
-        function setHTMLAndTypeset(element, html) {
-            if (!element) return;
-            element.innerHTML = html;
-            typesetMath(element);
-        }
 
         function initialize() {
             console.log("[DEBUG] Page loaded, starting initialization");
@@ -2058,7 +2037,7 @@ ${'='.repeat(80)}
         function showMetaMessage(message) {
             const metaContent = document.getElementById('meta-content');
             if (metaContent) {
-                setHTMLAndTypeset(metaContent, `<p style="text-align: center; color: #666; margin-top: 50px;">${message}</p>`);
+                metaContent.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">${message}</p>`;
             }
         }
         
@@ -2081,7 +2060,7 @@ ${'='.repeat(80)}
             // Show loading state
             const metaContent = document.getElementById('meta-content');
             if (metaContent) {
-                setHTMLAndTypeset(metaContent, '<p style="text-align: center; color: #666; margin-top: 50px;">Loading meta analysis...</p>');
+                metaContent.innerHTML = '<p style="text-align: center; color: #666; margin-top: 50px;">Loading meta analysis...</p>';
             }
             
             // Make request to server to get meta content
@@ -2321,7 +2300,7 @@ ${'='.repeat(80)}
             }
             
             console.log("[DEBUG] Final content length:", content.length);
-            setHTMLAndTypeset(sectionContent, content);
+            sectionContent.innerHTML = content;
         }
 
         // Function to parse meta content into sections
@@ -2387,7 +2366,7 @@ ${'='.repeat(80)}
                 console.log("[DEBUG] Active sub-tab:", activeSubTab, "Active section:", activeSection);
                 
                 // Display the header info
-                setHTMLAndTypeset(metaContent, `
+                metaContent.innerHTML = `
                     <div style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
                         <h3 style="margin: 0; color: #333;">Scratchpad - Generation ${metaData.generation}</h3>
                         <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">File: ${metaData.filename}</p>
@@ -2395,7 +2374,7 @@ ${'='.repeat(80)}
                     <div class="meta-content-body" style="line-height: 1.6;" id="meta-section-content">
                         <!-- Content will be loaded by showMetaSection -->
                     </div>
-                `);
+                `;
                 
                 // Show the appropriate section (use setTimeout to ensure DOM is updated)
                 setTimeout(() => {
@@ -2493,7 +2472,7 @@ ${'='.repeat(80)}
         function showMetaError(message) {
             const metaContent = document.getElementById('meta-content');
             if (metaContent) {
-                setHTMLAndTypeset(metaContent, `<p style="text-align: center; color: #e74c3c; margin-top: 50px;">${message}</p>`);
+                metaContent.innerHTML = `<p style="text-align: center; color: #e74c3c; margin-top: 50px;">${message}</p>`;
             }
         }
         
@@ -4349,16 +4328,13 @@ ${'='.repeat(80)}
             const score = data.combined_score;
             
             // Update node summary
-            const nodeSummaryEl = document.getElementById("node-summary");
-            if (nodeSummaryEl) {
-                setHTMLAndTypeset(nodeSummaryEl, `
-                    <h3>${agentName} (Gen ${data.generation})</h3>
-                    <p><strong>ID:</strong> <span style="font-family: monospace;">${data.id}</span></p>
-                    <p><strong>Parent ID:</strong> <span style="font-family: monospace;">${data.parent_id || 'None'}</span></p>
-                    <p><strong>Score:</strong> <span class="${getScoreClass(score)}">${formatScore(score)}</span></p>
-                    ${data.error ? `<p><strong>Error:</strong> <span class="metric-bad">${data.error}</span></p>` : ''}
-                `);
-            }
+            document.getElementById("node-summary").innerHTML = `
+                <h3>${agentName} (Gen ${data.generation})</h3>
+                <p><strong>ID:</strong> <span style="font-family: monospace;">${data.id}</span></p>
+                <p><strong>Parent ID:</strong> <span style="font-family: monospace;">${data.parent_id || 'None'}</span></p>
+                <p><strong>Score:</strong> <span class="${getScoreClass(score)}">${formatScore(score)}</span></p>
+                ${data.error ? `<p><strong>Error:</strong> <span class="metric-bad">${data.error}</span></p>` : ''}
+            `;
             
 
 
@@ -4679,7 +4655,7 @@ ${'='.repeat(80)}
                 ${longContentHtml}
             `;
             
-            setHTMLAndTypeset(nodeDetailsContainer, nodeDetailsHtml);
+            nodeDetailsContainer.innerHTML = nodeDetailsHtml;
             
             // Update code tab
             const codeWrapper = document.getElementById("agent-code-wrapper");
@@ -4739,7 +4715,7 @@ ${'='.repeat(80)}
             if (!stdoutLog && !stderrLog) {
                 logHtml = "<p>No log output available for this node.</p>";
             }
-            setHTMLAndTypeset(logOutputContainer, logHtml);
+            logOutputContainer.innerHTML = logHtml;
 
             // Populate LLM Result tab
             const llmResultContainer = document.getElementById("llm-result");
@@ -4756,7 +4732,7 @@ ${'='.repeat(80)}
                     llmResultHtml = "<p>No LLM result available for this node.</p>";
                 }
             }
-            setHTMLAndTypeset(llmResultContainer, llmResultHtml);
+            llmResultContainer.innerHTML = llmResultHtml;
 
             // Apply syntax highlighting to code blocks
             document.querySelectorAll('pre code:not(.nohighlight)').forEach((block) => {
