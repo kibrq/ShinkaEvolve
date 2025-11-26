@@ -17,15 +17,32 @@ DEFAULT_METRICS_ON_ERROR = {
 }
 
 
-def load_program(program_path: str) -> Any:
-    """Loads a Python module dynamically from a given file path."""
-    spec = importlib.util.spec_from_file_location("program", program_path)
-    if spec is None:
-        raise ImportError(f"Could not load spec for module at {program_path}")
-    if spec.loader is None:
-        raise ImportError(f"Spec loader is None for module at {program_path}")
+# def load_program(program_path: str) -> Any:
+#     """Loads a Python module dynamically from a given file path."""
+#     spec = importlib.util.spec_from_file_location("program", program_path)
+#     if spec is None:
+#         raise ImportError(f"Could not load spec for module at {program_path}")
+#     if spec.loader is None:
+#         raise ImportError(f"Spec loader is None for module at {program_path}")
 
+#     module = importlib.util.module_from_spec(spec)
+#     spec.loader.exec_module(module)
+#     return module
+
+
+def load_program(program_path: str, module_name: str = "user_program"):
+    import sys
+    
+    program_path = os.path.abspath(program_path)
+    module_dir = os.path.dirname(program_path)
+
+    # Make sure the directory is importable
+    if module_dir not in sys.path:
+        sys.path.insert(0, module_dir)
+
+    spec = importlib.util.spec_from_file_location(module_name, program_path)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
